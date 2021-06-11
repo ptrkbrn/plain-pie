@@ -3,3 +3,6 @@ env
 subtitles
 videos
 .DS_Store
+database.ini
+config.py
+__pycache__/
