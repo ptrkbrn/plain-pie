@@ -5,7 +5,7 @@ import base64
 from datetime import datetime
 from pysubparser import parser
 from pysubparser.cleaners import brackets
-from helpers import to_msec
+from helpers import to_msec, upload_to_aws
 
 import psycopg2
 from config import config
@@ -39,12 +39,10 @@ def connect():
                 ext = os.path.splitext(file)[1]
                 filepath = os.path.join(path, file)
                 basename = os.path.basename(filepath)
-                filename = os.path.splitext(basename)[0]
+                filename = os.path.splitext(basename)[0].upper()
                 # if subtitle file
                 if ext == '.srt':
-                    subtitles = brackets.clean(
-                        parser.parse(filepath)
-                    )
+                    subtitles = parser.parse(filepath)
                     for subtitle in subtitles:
                         sql = """INSERT INTO subtitles(text, episode, time_start, time_end)
                     VALUES(%s, %s, %s, %s);"""
@@ -76,7 +74,7 @@ def connect():
                         ret, frame = cam.read()
                         if ret:
                             # if video runtime still left, continue creating frames
-                            sql = """INSERT INTO screenshots(image_data, timestamp, episode, filename)
+                            sql = """INSERT INTO screenshots(timestamp, episode, filename, url)
                             VALUES(%s, %s, %s, %s);"""
                             name = filename + '-' + str(currentframe) + '.jpg'
                             # adds current timestamp to array
@@ -97,8 +95,11 @@ def connect():
                                     # increment last meme with current frame
                                     lastgreymean = cv2.mean(grey_frame)
                                     # encode image as string and add to db
-                                    img_str = cv2.imencode('.jpg', frame)[1].tostring()
-                                    cur.execute(sql, (img_str, timestamps[currentframe], filename, name))
+                                    image_string = cv2.imencode('.jpg', frame)[1].tobytes()
+                                    upload_to_aws(image_string, 'fully-loaded-nachos', name)
+                                    # print(image_string)
+                                    url = 'https://fully-loaded-nachos.s3.amazonaws.com/' + name
+                                    cur.execute(sql, (timestamps[currentframe], filename, name, url))
                                     conn.commit()
 
                             # increment counter to update frame count
